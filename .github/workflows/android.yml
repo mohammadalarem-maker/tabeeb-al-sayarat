@@ -1,0 +1,55 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: 'gradle'
+
+    - name: Create Environment Files
+      run: |
+        # Inject Gemini API Key for the Secrets Gradle Plugin
+        if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
+        else
+          echo "GEMINI_API_KEY=mock_gemini_api_key_for_ci_build" > .env
+        fi
+        
+        # Ensure local.properties has a mock or fallback key to prevent compilation issues
+        echo "GEMINI_API_KEY=mock_gemini_api_key_for_ci_build" >> local.properties
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Generate Gradle Wrapper
+      run: gradle wrapper
+
+    - name: Make Gradlew Executable
+      run: chmod +x gradlew
+
+    - name: Run Lint and Unit Tests
+      run: ./gradlew testDebugUnitTest
+
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
+
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Car-Diagnoser-AI-Debug
+        path: app/build/outputs/apk/debug/app-debug.apk
